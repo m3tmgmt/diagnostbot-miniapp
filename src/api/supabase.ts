@@ -205,6 +205,67 @@ export async function getLatestMeasurements(
   return results;
 }
 
+// === Check-ins (health_checkups) ===
+
+export interface CheckinRow {
+  id: string;
+  user_id: number;
+  mood: number | null;
+  energy_level: number | null;
+  sleep_quality: number | null;
+  stress_level: number | null;
+  notes: string | null;
+  checked_at: string;
+  created_at: string;
+}
+
+/** Получает историю check-ins пользователя */
+export async function getCheckins(
+  userId: number,
+  limit = 30,
+): Promise<CheckinRow[]> {
+  const { data, error } = await supabase
+    .from('health_checkups')
+    .select('*')
+    .eq('user_id', userId)
+    .order('checked_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('[miniapp] Error fetching checkins:', error);
+    return [];
+  }
+  return (data as CheckinRow[]) ?? [];
+}
+
+/** Считает streak (последовательные дни с check-in) */
+export function calculateStreakFromRows(rows: CheckinRow[]): number {
+  if (rows.length === 0) return 0;
+
+  let streak = 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let dayOffset = 0; dayOffset < 90; dayOffset++) {
+    const checkDate = new Date(today);
+    checkDate.setDate(checkDate.getDate() - dayOffset);
+    const dateStr = checkDate.toISOString().slice(0, 10);
+
+    const has = rows.some(
+      (c) => new Date(c.checked_at).toISOString().slice(0, 10) === dateStr,
+    );
+
+    if (has) {
+      streak++;
+    } else if (dayOffset === 0) {
+      continue; // Сегодня ещё нет — проверяем вчера
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
 /** Получает ВСЕ результаты (body scan + опросники), сортирует по дате */
 export async function getAllResults(userId: number, limit = 40): Promise<UnifiedResult[]> {
   const [diagResults, questResults] = await Promise.all([

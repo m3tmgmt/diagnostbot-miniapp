@@ -3,11 +3,13 @@ import { useState, useCallback, useEffect } from 'react';
 import { HomePage } from './pages/HomePage';
 import { ResultPage } from './pages/ResultPage';
 import { MeasurementsTab } from './pages/MeasurementsTab';
+import { DiaryTab } from './pages/DiaryTab';
 
 type Page =
   | { type: 'home' }
   | { type: 'result'; id: string }
-  | { type: 'measurements' };
+  | { type: 'measurements' }
+  | { type: 'diary' };
 
 export default function App() {
   const [page, setPage] = useState<Page>({ type: 'home' });
@@ -18,6 +20,10 @@ export default function App() {
     const tab = params.get('tab');
     if (tab === 'measurements') {
       setPage({ type: 'measurements' });
+      return;
+    }
+    if (tab === 'diary') {
+      setPage({ type: 'diary' });
       return;
     }
     const resultId = params.get('result');
@@ -38,6 +44,14 @@ export default function App() {
     setPage({ type: 'measurements' });
   }, []);
 
+  const handleNavigateToDiary = useCallback(() => {
+    setPage({ type: 'diary' });
+  }, []);
+
+  if (page.type === 'diary') {
+    return <DiaryTab onBack={handleBack} />;
+  }
+
   if (page.type === 'measurements') {
     return <MeasurementsTab onBack={handleBack} />;
   }
@@ -50,6 +64,7 @@ export default function App() {
     <HomePage
       onSelectResult={handleSelectResult}
       onNavigateToMeasurements={handleNavigateToMeasurements}
+      onNavigateToDiary={handleNavigateToDiary}
     />
   );
 }
