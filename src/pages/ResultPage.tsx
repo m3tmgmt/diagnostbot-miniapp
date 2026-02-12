@@ -13,7 +13,7 @@ import {
   toDiagUnified,
   toQuestUnified,
 } from '../api/supabase';
-import { QUESTIONNAIRE_INFO, getInterpretation } from '../utils/questionnaire';
+import { QUESTIONNAIRE_INFO, getInterpretation, severityEmoji } from '../utils/questionnaire';
 import type {
   UnifiedResult,
   PostureMetric,
@@ -152,21 +152,64 @@ export function ResultPage({ resultId, onBack }: ResultPageProps) {
         </Section>
       )}
 
-      {/* Интерпретация опросника */}
+      {/* Прогресс-бар результата опросника */}
+      {isQuest && result.score !== null && (
+        <Section header="Результат">
+          <div className="px-4 py-3">
+            <div className="flex justify-between mb-1">
+              <span className="text-sm font-medium">{result.score} / {result.maxScore}</span>
+              <span className="text-sm text-tg-hint">{Math.round((result.score / result.maxScore) * 100)}%</span>
+            </div>
+            <div
+              className="w-full rounded-full h-2.5"
+              style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #e5e7eb)' }}
+            >
+              <div
+                className="h-2.5 rounded-full transition-all"
+                style={{
+                  width: `${(result.score / result.maxScore) * 100}%`,
+                  backgroundColor: interp?.color ?? '#6b7280',
+                }}
+              />
+            </div>
+            {/* Тренд-стрелка: сравнение с предыдущим результатом */}
+            {questTrend.length >= 2 && (() => {
+              const prev = questTrend[questTrend.length - 2];
+              const curr = questTrend[questTrend.length - 1];
+              if (!prev || !curr) return null;
+              const diff = curr.score - prev.score;
+              if (diff === 0) return (
+                <div className="text-xs text-tg-hint mt-1">{'\u2192'} без изменений</div>
+              );
+              // Для опросников ниже = лучше (PHQ-9, GAD-7, PSS-10)
+              const better = diff < 0;
+              return (
+                <div className="text-xs mt-1" style={{ color: better ? '#34c759' : '#ff3b30' }}>
+                  {better ? '\u2193' : '\u2191'} {Math.abs(diff)} {better ? '(улучшение)' : '(ухудшение)'}
+                </div>
+              );
+            })()}
+          </div>
+        </Section>
+      )}
+
+      {/* Интерпретация опросника — badge */}
       {isQuest && interp && (
         <Section header="Интерпретация">
-          <Cell
-            before={
-              <span
-                className="inline-block w-3 h-3 rounded-full mr-1"
-                style={{ backgroundColor: interp.color }}
-              />
-            }
-            subtitle={result.interpretation}
-            multiline
-          >
-            {interp.label}
-          </Cell>
+          <div className="px-4 py-3">
+            <div
+              className="inline-block px-3 py-1 rounded-full text-sm font-medium"
+              style={{
+                backgroundColor: interp.color + '20',
+                color: interp.color,
+              }}
+            >
+              {result.severity ? severityEmoji(result.severity) : ''} {interp.label}
+            </div>
+            {result.interpretation && (
+              <div className="text-sm text-tg-hint mt-2">{result.interpretation}</div>
+            )}
+          </div>
         </Section>
       )}
 

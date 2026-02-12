@@ -283,3 +283,53 @@ export async function getAllResults(userId: number, limit = 40): Promise<Unified
 
   return unified.slice(0, limit);
 }
+
+// === Health Score (health_scores) ===
+
+export interface HealthScoreRow {
+  id: string;
+  user_id: number;
+  score: number;
+  activity_score: number | null;
+  sleep_score: number | null;
+  nutrition_score: number | null;
+  stress_score: number | null;
+  recovery_score: number | null;
+  habits_score: number | null;
+  source: string;
+  calculated_at: string;
+  created_at: string;
+}
+
+/** Получает последний Health Score */
+export async function getLatestHealthScore(userId: number): Promise<HealthScoreRow | null> {
+  const { data, error } = await supabase
+    .from('health_scores')
+    .select('*')
+    .eq('user_id', userId)
+    .order('calculated_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) return null;
+  return data as HealthScoreRow;
+}
+
+/** Получает историю Health Score (для тренда) */
+export async function getHealthScoreHistory(userId: number, days = 30): Promise<HealthScoreRow[]> {
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+
+  const { data, error } = await supabase
+    .from('health_scores')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('calculated_at', since.toISOString())
+    .order('calculated_at', { ascending: true });
+
+  if (error) {
+    console.error('[miniapp] Error fetching health score history:', error);
+    return [];
+  }
+  return (data as HealthScoreRow[]) ?? [];
+}

@@ -10,9 +10,10 @@ interface HomePageProps {
   onSelectResult: (id: string) => void;
   onNavigateToMeasurements: () => void;
   onNavigateToDiary: () => void;
+  onNavigateToHealthScore: () => void;
 }
 
-export function HomePage({ onSelectResult, onNavigateToMeasurements, onNavigateToDiary }: HomePageProps) {
+export function HomePage({ onSelectResult, onNavigateToMeasurements, onNavigateToDiary, onNavigateToHealthScore }: HomePageProps) {
   const { userId } = useTelegram();
   const [results, setResults] = useState<UnifiedResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +57,12 @@ export function HomePage({ onSelectResult, onNavigateToMeasurements, onNavigateT
       {/* Вкладки фильтрации */}
       <div className="px-4 pt-3 pb-1">
         <SegmentedControl>
+          <SegmentedControl.Item
+            selected={false}
+            onClick={() => onNavigateToHealthScore()}
+          >
+            {'\u{1FA7A}'} Score
+          </SegmentedControl.Item>
           <SegmentedControl.Item
             selected={tab === 'all'}
             onClick={() => setTab('all')}

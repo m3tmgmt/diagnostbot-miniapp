@@ -4,12 +4,14 @@ import { HomePage } from './pages/HomePage';
 import { ResultPage } from './pages/ResultPage';
 import { MeasurementsTab } from './pages/MeasurementsTab';
 import { DiaryTab } from './pages/DiaryTab';
+import { HealthScoreTab } from './pages/HealthScoreTab';
 
 type Page =
   | { type: 'home' }
   | { type: 'result'; id: string }
   | { type: 'measurements' }
-  | { type: 'diary' };
+  | { type: 'diary' }
+  | { type: 'healthscore' };
 
 export default function App() {
   const [page, setPage] = useState<Page>({ type: 'home' });
@@ -24,6 +26,10 @@ export default function App() {
     }
     if (tab === 'diary') {
       setPage({ type: 'diary' });
+      return;
+    }
+    if (tab === 'healthscore') {
+      setPage({ type: 'healthscore' });
       return;
     }
     const resultId = params.get('result');
@@ -48,6 +54,14 @@ export default function App() {
     setPage({ type: 'diary' });
   }, []);
 
+  const handleNavigateToHealthScore = useCallback(() => {
+    setPage({ type: 'healthscore' });
+  }, []);
+
+  if (page.type === 'healthscore') {
+    return <HealthScoreTab onBack={handleBack} />;
+  }
+
   if (page.type === 'diary') {
     return <DiaryTab onBack={handleBack} />;
   }
@@ -65,6 +79,7 @@ export default function App() {
       onSelectResult={handleSelectResult}
       onNavigateToMeasurements={handleNavigateToMeasurements}
       onNavigateToDiary={handleNavigateToDiary}
+      onNavigateToHealthScore={handleNavigateToHealthScore}
     />
   );
 }
