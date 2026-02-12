@@ -11,18 +11,26 @@ import {
 import type { DiagnosticResult } from '../types/diagnostics';
 
 interface TrendChartProps {
-  results: DiagnosticResult[];
+  /** Body scan результаты (исходный формат) */
+  results?: DiagnosticResult[];
+  /** Готовые данные для графика (для опросников) */
+  rawData?: Array<{ score: number; date: string }>;
+  /** Максимальное значение оси Y (по умолчанию 100) */
+  maxScore?: number;
 }
 
-export function TrendChart({ results }: TrendChartProps) {
-  // От старого к новому (слева направо)
-  const data = [...results].reverse().map((r) => ({
-    score: r.score ?? 0,
-    date: new Date(r.executed_at).toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'short',
-    }),
-  }));
+export function TrendChart({ results, rawData, maxScore = 100 }: TrendChartProps) {
+  // Используем rawData если есть, иначе конвертируем results
+  const data = rawData
+    ?? (results
+      ? [...results].reverse().map((r) => ({
+          score: r.score ?? 0,
+          date: new Date(r.executed_at).toLocaleDateString('ru-RU', {
+            day: 'numeric',
+            month: 'short',
+          }),
+        }))
+      : []);
 
   if (data.length === 0) {
     return <div className="text-center text-tg-hint p-4">Нет данных для графика</div>;
@@ -42,7 +50,7 @@ export function TrendChart({ results }: TrendChartProps) {
             tick={{ fill: 'var(--tg-theme-hint-color, #8e8e93)', fontSize: 12 }}
           />
           <YAxis
-            domain={[0, 100]}
+            domain={[0, maxScore]}
             tick={{ fill: 'var(--tg-theme-hint-color, #8e8e93)', fontSize: 12 }}
           />
           <Tooltip

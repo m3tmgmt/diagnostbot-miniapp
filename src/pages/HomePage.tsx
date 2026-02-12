@@ -1,35 +1,36 @@
-// Главная страница — список результатов диагностики
+// Главная страница — список результатов с табами фильтрации
 import { useEffect, useState } from 'react';
-import { Section, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
+import { Section, Spinner, Placeholder, SegmentedControl } from '@telegram-apps/telegram-ui';
 import { ResultCard } from '../components/ResultCard';
 import { useTelegram } from '../hooks/useTelegram';
-import { getResults } from '../api/supabase';
-import type { DiagnosticResult } from '../types/diagnostics';
+import { getAllResults } from '../api/supabase';
+import type { UnifiedResult, ResultCategory } from '../types/diagnostics';
 
 interface HomePageProps {
   onSelectResult: (id: string) => void;
 }
 
-const TEST_NAMES: Record<string, string> = {
-  body_scan_full_body_video: 'Body Scan',
-  body_scan_eye_tracking: 'Eye Tracking',
-};
-
 export function HomePage({ onSelectResult }: HomePageProps) {
   const { userId } = useTelegram();
-  const [results, setResults] = useState<DiagnosticResult[]>([]);
+  const [results, setResults] = useState<UnifiedResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<ResultCategory>('all');
 
   useEffect(() => {
     if (!userId) {
       setLoading(false);
       return;
     }
-    getResults(userId).then((data) => {
+    getAllResults(userId).then((data) => {
       setResults(data);
       setLoading(false);
     });
   }, [userId]);
+
+  // Фильтрация по выбранной вкладке
+  const filtered = tab === 'all'
+    ? results
+    : results.filter((r) => r.kind === tab);
 
   if (loading) {
     return (
@@ -49,16 +50,47 @@ export function HomePage({ onSelectResult }: HomePageProps) {
   }
 
   return (
-    <Section header="Мои результаты">
-      {results.map((r) => (
-        <ResultCard
-          key={r.id}
-          testName={TEST_NAMES[r.test_id] ?? r.test_id}
-          score={r.score}
-          date={r.executed_at}
-          onClick={() => onSelectResult(r.id)}
-        />
-      ))}
-    </Section>
+    <div>
+      {/* Вкладки фильтрации */}
+      <div className="px-4 pt-3 pb-1">
+        <SegmentedControl>
+          <SegmentedControl.Item
+            selected={tab === 'all'}
+            onClick={() => setTab('all')}
+          >
+            Все
+          </SegmentedControl.Item>
+          <SegmentedControl.Item
+            selected={tab === 'body_scan'}
+            onClick={() => setTab('body_scan')}
+          >
+            Body Scan
+          </SegmentedControl.Item>
+          <SegmentedControl.Item
+            selected={tab === 'questionnaire'}
+            onClick={() => setTab('questionnaire')}
+          >
+            Опросники
+          </SegmentedControl.Item>
+        </SegmentedControl>
+      </div>
+
+      {/* Список результатов */}
+      <Section header={`Результаты (${filtered.length})`}>
+        {filtered.length === 0 ? (
+          <div className="p-4 text-center text-tg-hint">
+            Нет результатов в этой категории
+          </div>
+        ) : (
+          filtered.map((r) => (
+            <ResultCard
+              key={r.id}
+              result={r}
+              onClick={() => onSelectResult(r.id)}
+            />
+          ))
+        )}
+      </Section>
+    </div>
   );
 }
