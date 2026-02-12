@@ -36,7 +36,7 @@ export type QuestionnaireType = 'pss10' | 'gad7' | 'phq9';
 export type SeverityLevel = 'minimal' | 'mild' | 'moderate' | 'severe';
 
 /** Категория для фильтрации */
-export type ResultCategory = 'all' | 'body_scan' | 'questionnaire';
+export type ResultCategory = 'all' | 'body_scan' | 'questionnaire' | 'measurements';
 
 /** Строка из таблицы questionnaire_results */
 export interface QuestionnaireResultRow {

@@ -8,9 +8,10 @@ import type { UnifiedResult, ResultCategory } from '../types/diagnostics';
 
 interface HomePageProps {
   onSelectResult: (id: string) => void;
+  onNavigateToMeasurements: () => void;
 }
 
-export function HomePage({ onSelectResult }: HomePageProps) {
+export function HomePage({ onSelectResult, onNavigateToMeasurements }: HomePageProps) {
   const { userId } = useTelegram();
   const [results, setResults] = useState<UnifiedResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,6 +72,12 @@ export function HomePage({ onSelectResult }: HomePageProps) {
             onClick={() => setTab('questionnaire')}
           >
             Опросники
+          </SegmentedControl.Item>
+          <SegmentedControl.Item
+            selected={false}
+            onClick={() => onNavigateToMeasurements()}
+          >
+            Замеры
           </SegmentedControl.Item>
         </SegmentedControl>
       </div>

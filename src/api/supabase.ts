@@ -141,6 +141,70 @@ export function toQuestUnified(r: QuestionnaireResultRow): UnifiedResult {
   };
 }
 
+// === Замеры (health_measurements) ===
+
+export interface MeasurementRow {
+  id: string;
+  user_id: number;
+  measurement_type: 'weight' | 'blood_pressure' | 'pulse' | 'temperature';
+  value: Record<string, number>;
+  unit: string;
+  note: string | null;
+  measured_at: string;
+  created_at: string;
+}
+
+/** Получает историю замеров пользователя по типу */
+export async function getMeasurements(
+  userId: number,
+  type?: string,
+  limit = 30,
+): Promise<MeasurementRow[]> {
+  let query = supabase
+    .from('health_measurements')
+    .select('*')
+    .eq('user_id', userId)
+    .order('measured_at', { ascending: false })
+    .limit(limit);
+
+  if (type) {
+    query = query.eq('measurement_type', type);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error('[miniapp] Error fetching measurements:', error);
+    return [];
+  }
+  return (data as MeasurementRow[]) ?? [];
+}
+
+/** Получает последний замер каждого типа */
+export async function getLatestMeasurements(
+  userId: number,
+): Promise<Record<string, MeasurementRow>> {
+  const types = ['weight', 'blood_pressure', 'pulse', 'temperature'];
+  const results: Record<string, MeasurementRow> = {};
+
+  // Один запрос, group в памяти
+  const { data, error } = await supabase
+    .from('health_measurements')
+    .select('*')
+    .eq('user_id', userId)
+    .in('measurement_type', types)
+    .order('measured_at', { ascending: false })
+    .limit(100);
+
+  if (error || !data) return results;
+
+  for (const row of data as MeasurementRow[]) {
+    if (!results[row.measurement_type]) {
+      results[row.measurement_type] = row;
+    }
+  }
+  return results;
+}
+
 /** Получает ВСЕ результаты (body scan + опросники), сортирует по дате */
 export async function getAllResults(userId: number, limit = 40): Promise<UnifiedResult[]> {
   const [diagResults, questResults] = await Promise.all([
