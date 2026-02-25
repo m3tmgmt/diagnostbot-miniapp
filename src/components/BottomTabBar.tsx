@@ -1,7 +1,7 @@
-// Нижняя панель навигации — 4 таба Mini App
-// HealthScore | Анализы | Карта тела | SOS
+// Нижняя панель навигации — 4 таба Mini App (spec: diagnostbot.md → Mini App)
+// HealthScore | Анализы | Прогноз рисков | SOS
 
-export type TabId = 'healthscore' | 'labs' | 'bodymap' | 'emergency';
+export type TabId = 'healthscore' | 'labs' | 'risk' | 'emergency';
 
 interface TabItem {
   id: TabId;
@@ -12,7 +12,7 @@ interface TabItem {
 const TABS: TabItem[] = [
   { id: 'healthscore', icon: '❤️', label: 'Score' },
   { id: 'labs', icon: '🔬', label: 'Анализы' },
-  { id: 'bodymap', icon: '💀', label: 'Карта тела' },
+  { id: 'risk', icon: '📊', label: 'Риски' },
   { id: 'emergency', icon: '🆘', label: 'SOS' },
 ];
 

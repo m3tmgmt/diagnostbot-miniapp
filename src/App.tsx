@@ -1,5 +1,5 @@
-// Корневой компонент — роутинг + bottom tab bar (4 таба)
-// Shard E5: HealthScore | Labs | BodyMap | Emergency + deep links
+// Корневой компонент — роутинг + bottom tab bar (4 таба по spec)
+// diagnostbot.md → Mini App: HealthScore | Labs | Risk Prediction | Emergency + deep links
 import { useState, useCallback, useEffect } from 'react';
 import { ThemeProvider, SafeAreaProvider, SafeAreaView } from '@plemya/design-system';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -13,6 +13,7 @@ import { TimelinePage } from './pages/TimelinePage';
 import { EmergencyCardPage } from './pages/EmergencyCardPage';
 import { BodyMapTab } from './pages/BodyMapTab';
 import { LabResultsTab } from './pages/LabResultsTab';
+import { RiskPredictionTab } from './pages/RiskPredictionTab';
 
 type Page =
   | { type: 'home' }
@@ -23,17 +24,18 @@ type Page =
   | { type: 'timeline' }
   | { type: 'emergency' }
   | { type: 'bodymap' }
-  | { type: 'labs' };
+  | { type: 'labs' }
+  | { type: 'risk' };
 
-// Страницы, для которых показываем bottom tab bar
-const TAB_PAGES = new Set<string>(['healthscore', 'labs', 'bodymap', 'emergency']);
+// Страницы, для которых показываем bottom tab bar (4 таба по spec)
+const TAB_PAGES = new Set<string>(['healthscore', 'labs', 'risk', 'emergency']);
 
 /** Маппинг Page.type → TabId для подсветки активного таба */
 function pageToTabId(pageType: string): TabId | null {
   switch (pageType) {
     case 'healthscore': return 'healthscore';
     case 'labs': return 'labs';
-    case 'bodymap': return 'bodymap';
+    case 'risk': return 'risk';
     case 'emergency': return 'emergency';
     default: return null;
   }
@@ -52,6 +54,7 @@ export default function App() {
     if (tab === 'timeline') { setPage({ type: 'timeline' }); return; }
     if (tab === 'emergency') { setPage({ type: 'emergency' }); return; }
     if (tab === 'bodymap') { setPage({ type: 'bodymap' }); return; }
+    if (tab === 'risk') { setPage({ type: 'risk' }); return; }
     if (tab === 'labs') { setPage({ type: 'labs' }); return; }
     const resultId = params.get('result');
     if (resultId) {
@@ -117,6 +120,8 @@ export default function App() {
         return <EmergencyCardPage onBack={handleBack} />;
       case 'bodymap':
         return <BodyMapTab onBack={handleBack} />;
+      case 'risk':
+        return <RiskPredictionTab onBack={handleBack} />;
       case 'labs':
         return <LabResultsTab onBack={handleBack} onSelectResult={handleSelectResult} />;
       default:
