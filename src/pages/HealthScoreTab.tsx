@@ -1,6 +1,8 @@
 // Страница Health Score — главная метрика здоровья (Phase 4.7)
+// Интеграция @plemya/design-system: HealthScoreCard, MetricCard, HEALTH_COLORS
 import { useEffect, useState } from 'react';
-import { Section, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
+import { Section } from '@telegram-apps/telegram-ui';
+import { HealthScoreCard, MetricCard, HEALTH_COLORS, TgLoader, TgErrorView, TgEmptyState } from '@plemya/design-system';
 import {
   LineChart,
   Line,
@@ -21,9 +23,9 @@ const COMPONENT_CONFIG = [
   { key: 'activity_score' as const, emoji: '\u{1F4AA}', name: 'Активность' },
   { key: 'sleep_score' as const,    emoji: '\u{1F634}', name: 'Сон' },
   { key: 'nutrition_score' as const, emoji: '\u{1F957}', name: 'Питание' },
-  { key: 'stress_score' as const,   emoji: '\u{1F9D8}', name: 'Стресс' },
-  { key: 'recovery_score' as const, emoji: '\u{1F486}', name: 'Восстановление' },
-  { key: 'habits_score' as const,   emoji: '\u{1F4CB}', name: 'Привычки' },
+  { key: 'mental_score' as const,     emoji: '\u{1F9D8}', name: 'Ментальное здоровье' },
+  { key: 'recovery_score' as const,  emoji: '\u{1F486}', name: 'Восстановление' },
+  { key: 'biometrics_score' as const, emoji: '\u{1F4CB}', name: 'Биометрия' },
 ];
 
 type ComponentKey = typeof COMPONENT_CONFIG[number]['key'];
@@ -37,12 +39,11 @@ function getScoreLabel(score: number): string {
   return 'Критично';
 }
 
-/** Цвет прогресс-бара по значению */
-function getBarColor(value: number): string {
-  if (value >= 80) return '#34c759';
-  if (value >= 60) return '#ff9500';
-  if (value >= 40) return '#ff6b35';
-  return '#ff3b30';
+/** Статус MetricCard по значению компонента */
+function getComponentStatus(val: number): 'good' | 'warning' | 'danger' {
+  if (val >= 60) return 'good';
+  if (val >= 40) return 'warning';
+  return 'danger';
 }
 
 /** Подготовка данных для графика тренда */
@@ -66,6 +67,7 @@ export function HealthScoreTab({ onBack }: HealthScoreTabProps) {
   const [latest, setLatest] = useState<HealthScoreRow | null>(null);
   const [history, setHistory] = useState<HealthScoreRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) {
@@ -78,30 +80,45 @@ export function HealthScoreTab({ onBack }: HealthScoreTabProps) {
     ]).then(([latestData, historyData]) => {
       setLatest(latestData);
       setHistory(historyData);
+    }).catch((err) => {
+      console.error('[HealthScoreTab] Ошибка загрузки:', err);
+      setError('Не удалось загрузить данные');
+    }).finally(() => {
       setLoading(false);
     });
   }, [userId]);
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Spinner size="l" />
-      </div>
-    );
+    return <TgLoader text="Загрузка Health Score..." />;
+  }
+
+  if (error) {
+    return <TgErrorView message={error} onRetry={() => window.location.reload()} />;
   }
 
   if (!latest) {
     return (
-      <Placeholder
-        header="Нет данных"
+      <TgEmptyState
+        icon="🩺"
+        title="Нет данных"
         description="Используй /health в боте чтобы рассчитать Health Score"
       />
     );
   }
 
   const scoreLabel = getScoreLabel(latest.score);
-  const scoreColor = getBarColor(latest.score);
   const chartData = toChartData(history);
+
+  // Тренд: сравниваем с предыдущим значением из истории
+  let trend: 'up' | 'down' | 'stable' | undefined;
+  let trendValue: number | undefined;
+  if (history.length >= 2) {
+    const prevScore = history[history.length - 2]?.score;
+    if (prevScore !== undefined) {
+      trendValue = latest.score - prevScore;
+      trend = trendValue > 0 ? 'up' : trendValue < 0 ? 'down' : 'stable';
+    }
+  }
 
   // Находим самый слабый компонент для рекомендации
   let weakest: { key: ComponentKey; name: string; value: number } | null = null;
@@ -119,74 +136,38 @@ export function HealthScoreTab({ onBack }: HealthScoreTabProps) {
 
   return (
     <div className="pb-4">
-      {/* Основной Score */}
+      {/* Основной Score — HealthScoreCard из design-system */}
       <Section header={'\u{1FA7A} Health Score'}>
         <div className="px-4 py-4">
-          <div className="text-center">
-            <div className="text-5xl font-bold" style={{ color: scoreColor }}>
-              {latest.score}
-            </div>
-            <div className="text-lg mt-1" style={{ color: scoreColor }}>
-              {scoreLabel}
-            </div>
-            <div className="text-xs text-tg-hint mt-1">
-              Обновлено: {formattedDate}
-            </div>
-          </div>
-          {/* Полоса прогресса */}
-          <div className="mt-4">
-            <div
-              className="w-full rounded-full h-3"
-              style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #e5e7eb)' }}
-            >
-              <div
-                className="h-3 rounded-full transition-all"
-                style={{
-                  width: `${latest.score}%`,
-                  backgroundColor: scoreColor,
-                }}
-              />
-            </div>
-            <div className="flex justify-between text-xs text-tg-hint mt-1">
-              <span>0</span>
-              <span>100</span>
-            </div>
+          <HealthScoreCard
+            score={latest.score}
+            label={scoreLabel}
+            trend={trend}
+            trendValue={trendValue}
+            size="lg"
+          />
+          <div className="text-xs text-tg-hint mt-2 text-center">
+            Обновлено: {formattedDate}
           </div>
         </div>
       </Section>
 
-      {/* Компоненты */}
+      {/* Компоненты — MetricCard из design-system */}
       <Section header={'\u{1F4CA} Компоненты'}>
-        <div className="px-4 py-3 space-y-3">
+        <div className="px-4 py-3 space-y-2">
           {COMPONENT_CONFIG.map((comp) => {
             const val = latest[comp.key];
             if (val == null) return null;
-            const color = getBarColor(val);
 
             return (
-              <div key={comp.key}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <span>{comp.emoji}</span>
-                    <span className="text-sm font-medium">{comp.name}</span>
-                  </div>
-                  <span className="text-sm font-bold" style={{ color }}>
-                    {val}
-                  </span>
-                </div>
-                <div
-                  className="w-full rounded-full h-2"
-                  style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #e5e7eb)' }}
-                >
-                  <div
-                    className="h-2 rounded-full transition-all"
-                    style={{
-                      width: `${val}%`,
-                      backgroundColor: color,
-                    }}
-                  />
-                </div>
-              </div>
+              <MetricCard
+                key={comp.key}
+                label={comp.name}
+                value={val}
+                unit="/100"
+                icon={<span>{comp.emoji}</span>}
+                status={getComponentStatus(val)}
+              />
             );
           })}
         </div>
@@ -224,9 +205,9 @@ export function HealthScoreTab({ onBack }: HealthScoreTabProps) {
                 <Line
                   type="monotone"
                   dataKey="score"
-                  stroke="#34c759"
+                  stroke={HEALTH_COLORS.excellent}
                   strokeWidth={2}
-                  dot={{ r: 3, fill: '#34c759' }}
+                  dot={{ r: 3, fill: HEALTH_COLORS.excellent }}
                   connectNulls
                 />
               </LineChart>

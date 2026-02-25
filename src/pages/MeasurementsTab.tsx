@@ -1,6 +1,8 @@
 // Страница замеров — последние значения + графики трендов (Phase 4.0.1)
+// Интеграция @plemya/design-system: HEALTH_COLORS для цветовой палитры замеров
 import { useEffect, useState } from 'react';
-import { Section, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
+import { Section } from '@telegram-apps/telegram-ui';
+import { HEALTH_COLORS, TgLoader, TgErrorView, TgEmptyState } from '@plemya/design-system';
 import {
   LineChart,
   Line,
@@ -16,40 +18,40 @@ import {
   type MeasurementRow,
 } from '../api/supabase';
 
-// Конфиг типов замеров
+// Конфиг типов замеров — цвета из @plemya/design-system
 const MEASUREMENT_CONFIG = {
-  weight: { emoji: '⚖️', name: 'Вес', unit: 'кг', color: '#4CAF50', valueKey: 'kg' },
-  blood_pressure: { emoji: '💓', name: 'Давление', unit: 'мм рт.ст.', color: '#F44336', valueKey: 'systolic' },
-  pulse: { emoji: '💗', name: 'Пульс', unit: 'уд/мин', color: '#FF9800', valueKey: 'bpm' },
-  temperature: { emoji: '🌡️', name: 'Температура', unit: '°C', color: '#2196F3', valueKey: 'celsius' },
+  weight: { emoji: '⚖️', name: 'Вес', unit: 'кг', color: HEALTH_COLORS.nutrition, valueKey: 'kg' },
+  blood_pressure: { emoji: '💓', name: 'Давление', unit: 'мм рт.ст.', color: HEALTH_COLORS.poor, valueKey: 'systolic' },
+  pulse: { emoji: '💗', name: 'Пульс', unit: 'уд/мин', color: HEALTH_COLORS.moderate, valueKey: 'bpm' },
+  temperature: { emoji: '🌡️', name: 'Температура', unit: '°C', color: HEALTH_COLORS.biometrics, valueKey: 'celsius' },
 } as const;
 
 type MeasurementType = keyof typeof MEASUREMENT_CONFIG;
 const ALL_TYPES: MeasurementType[] = ['weight', 'blood_pressure', 'pulse', 'temperature'];
 
-// Оценка нормы (упрощённая версия из бота)
+// Оценка нормы (упрощённая версия из бота) — цвета из design-system
 function assessNorm(type: MeasurementType, value: Record<string, number>): { label: string; color: string } {
   switch (type) {
     case 'blood_pressure': {
       const sys = value.systolic;
       const dia = value.diastolic;
-      if (sys < 120 && dia < 80) return { label: 'Норма', color: '#4CAF50' };
-      if (sys < 140 && dia < 90) return { label: 'Повышенное', color: '#FF9800' };
-      return { label: 'Высокое', color: '#F44336' };
+      if (sys < 120 && dia < 80) return { label: 'Норма', color: HEALTH_COLORS.excellent };
+      if (sys < 140 && dia < 90) return { label: 'Повышенное', color: HEALTH_COLORS.moderate };
+      return { label: 'Высокое', color: HEALTH_COLORS.poor };
     }
     case 'pulse': {
       const bpm = value.bpm;
-      if (bpm >= 60 && bpm <= 100) return { label: 'Норма', color: '#4CAF50' };
-      return { label: bpm < 60 ? 'Брадикардия' : 'Тахикардия', color: '#FF9800' };
+      if (bpm >= 60 && bpm <= 100) return { label: 'Норма', color: HEALTH_COLORS.excellent };
+      return { label: bpm < 60 ? 'Брадикардия' : 'Тахикардия', color: HEALTH_COLORS.moderate };
     }
     case 'temperature': {
       const c = value.celsius;
-      if (c >= 36.1 && c <= 37.2) return { label: 'Норма', color: '#4CAF50' };
-      if (c > 37.2 && c <= 38) return { label: 'Субфебрильная', color: '#FF9800' };
-      return { label: c > 38 ? 'Повышенная' : 'Пониженная', color: '#F44336' };
+      if (c >= 36.1 && c <= 37.2) return { label: 'Норма', color: HEALTH_COLORS.excellent };
+      if (c > 37.2 && c <= 38) return { label: 'Субфебрильная', color: HEALTH_COLORS.moderate };
+      return { label: c > 38 ? 'Повышенная' : 'Пониженная', color: HEALTH_COLORS.poor };
     }
     default:
-      return { label: 'Записано', color: '#4CAF50' };
+      return { label: 'Записано', color: HEALTH_COLORS.excellent };
   }
 }
 
@@ -84,6 +86,7 @@ export function MeasurementsTab({ onBack }: MeasurementsTabProps) {
   const [latest, setLatest] = useState<Record<string, MeasurementRow>>({});
   const [history, setHistory] = useState<Record<string, MeasurementRow[]>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) {
@@ -102,24 +105,29 @@ export function MeasurementsTab({ onBack }: MeasurementsTabProps) {
         hist[t] = historyArrays[i];
       });
       setHistory(hist);
+    }).catch((err) => {
+      console.error('[MeasurementsTab] Ошибка загрузки:', err);
+      setError('Не удалось загрузить замеры');
+    }).finally(() => {
       setLoading(false);
     });
   }, [userId]);
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Spinner size="l" />
-      </div>
-    );
+    return <TgLoader text="Загрузка замеров..." />;
+  }
+
+  if (error) {
+    return <TgErrorView message={error} onRetry={() => window.location.reload()} />;
   }
 
   const hasAny = ALL_TYPES.some((t) => latest[t]);
 
   if (!hasAny) {
     return (
-      <Placeholder
-        header="Нет замеров"
+      <TgEmptyState
+        icon="📏"
+        title="Нет замеров"
         description="Запиши первый замер в боте — напиши «мой вес 80 кг» или «давление 120/80»"
       />
     );
@@ -203,7 +211,7 @@ export function MeasurementsTab({ onBack }: MeasurementsTabProps) {
                       <Line
                         type="monotone"
                         dataKey="systolic"
-                        stroke="#F44336"
+                        stroke={HEALTH_COLORS.poor}
                         strokeWidth={2}
                         dot={{ r: 3 }}
                         name="Систолическое"
@@ -211,7 +219,7 @@ export function MeasurementsTab({ onBack }: MeasurementsTabProps) {
                       <Line
                         type="monotone"
                         dataKey="diastolic"
-                        stroke="#2196F3"
+                        stroke={HEALTH_COLORS.biometrics}
                         strokeWidth={2}
                         dot={{ r: 3 }}
                         name="Диастолическое"

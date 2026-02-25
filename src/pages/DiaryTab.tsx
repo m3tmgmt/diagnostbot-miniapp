@@ -1,6 +1,7 @@
 // Страница дневника — check-in история: streak + сегодня + тренды + список (Phase 4.1.1)
 import { useEffect, useState } from 'react';
-import { Section, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
+import { Section } from '@telegram-apps/telegram-ui';
+import { TgLoader, TgErrorView, TgEmptyState } from '@plemya/design-system';
 import {
   LineChart,
   Line,
@@ -71,6 +72,7 @@ export function DiaryTab({ onBack }: DiaryTabProps) {
   const [checkins, setCheckins] = useState<CheckinRow[]>([]);
   const [streak, setStreak] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) {
@@ -80,23 +82,28 @@ export function DiaryTab({ onBack }: DiaryTabProps) {
     getCheckins(userId, 30).then((data) => {
       setCheckins(data);
       setStreak(calculateStreakFromRows(data));
+    }).catch((err) => {
+      console.error('[DiaryTab] Ошибка загрузки:', err);
+      setError('Не удалось загрузить дневник');
+    }).finally(() => {
       setLoading(false);
     });
   }, [userId]);
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Spinner size="l" />
-      </div>
-    );
+    return <TgLoader text="Загрузка дневника..." />;
+  }
+
+  if (error) {
+    return <TgErrorView message={error} onRetry={() => window.location.reload()} />;
   }
 
   if (checkins.length === 0) {
     return (
-      <Placeholder
-        header="Нет check-ins"
-        description={'Напиши \u00AB\u0447\u0435\u043A\u0438\u043D\u00BB в боте, чтобы записать самочувствие'}
+      <TgEmptyState
+        icon="📔"
+        title="Дневник пуст"
+        description="Напиши «чекин» в боте, чтобы записать самочувствие"
       />
     );
   }

@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { AppRoot } from '@telegram-apps/telegram-ui';
 import App from './App';
+import '@plemya/design-system/src/styles/tokens.css';
 import './index.css';
 import '@telegram-apps/telegram-ui/dist/styles.css';
 

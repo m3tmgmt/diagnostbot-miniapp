@@ -1,7 +1,9 @@
-// Страница детального результата — body scan и опросники
+// Страница детального результата — body scan, опросники и анализы
 import { useEffect, useState } from 'react';
-import { Section, Spinner, Cell } from '@telegram-apps/telegram-ui';
+import { Section, Cell } from '@telegram-apps/telegram-ui';
+import { TgLoader, TgEmptyState } from '@plemya/design-system';
 import { TrendChart } from '../components/TrendChart';
+import { LabTrendChart } from '../components/LabTrendChart';
 import { MetricBar } from '../components/MetricBar';
 import { ScoreGauge } from '../components/ScoreGauge';
 import { useTelegram, useBackButton } from '../hooks/useTelegram';
@@ -10,8 +12,11 @@ import {
   getResultsByTest,
   getQuestionnaireResultById,
   getQuestionnaireResultsByType,
+  getLabResultById,
+  getLabValueHistory,
   toDiagUnified,
   toQuestUnified,
+  toLabUnified,
 } from '../api/supabase';
 import { QUESTIONNAIRE_INFO, getInterpretation, severityEmoji } from '../utils/questionnaire';
 import type {
@@ -31,6 +36,26 @@ interface ResultPageProps {
 const TEST_NAMES: Record<string, string> = {
   body_scan_full_body_video: 'Body Scan \u2014 Полное сканирование',
   body_scan_eye_tracking: 'Eye Tracking \u2014 Когнитивный скрининг',
+};
+
+// Названия категорий анализов
+const LAB_CATEGORY_NAMES: Record<string, string> = {
+  blood_general: '\u{1FA78} Общий анализ крови',
+  blood_biochem: '\u{1F9EA} Биохимия крови',
+  hormones: '\u2697\uFE0F Гормоны',
+  vitamins: '\u{1F48A} Витамины и микроэлементы',
+  urine: '\u{1F9EB} Анализ мочи',
+  lipids: '\u{1FAC0} Липидный профиль',
+  other: '\u{1F4CB} Анализы',
+};
+
+// Emoji статуса значения анализа
+const STATUS_EMOJI: Record<string, string> = {
+  normal: '\u{1F7E2}',
+  low: '\u{1F7E1}',
+  high: '\u{1F7E1}',
+  critical_low: '\u{1F534}',
+  critical_high: '\u{1F534}',
 };
 
 /** Конвертация опросников в данные для TrendChart */
@@ -53,12 +78,15 @@ export function ResultPage({ resultId, onBack }: ResultPageProps) {
   const [diagTrend, setDiagTrend] = useState<DiagnosticResult[]>([]);
   // Тренд для опросников
   const [questTrend, setQuestTrend] = useState<Array<{ score: number; date: string }>>([]);
+  // Тренд для лабораторного показателя
+  const [labTrendData, setLabTrendData] = useState<Array<{ date: string; value: number; refMin?: number; refMax?: number }>>([]);
+  const [selectedBiomarker, setSelectedBiomarker] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
-      // Сначала ищем в user_diagnostic_results
-      const diagResult = await getResultById(resultId);
+      // Сначала ищем в user_diagnostic_results (с user_id фильтром — IDOR fix)
+      const diagResult = await getResultById(resultId, userId);
       if (diagResult) {
         setResult(toDiagUnified(diagResult));
         if (userId) {
@@ -69,13 +97,27 @@ export function ResultPage({ resultId, onBack }: ResultPageProps) {
         return;
       }
 
-      // Если не нашли — ищем в questionnaire_results
-      const questResult = await getQuestionnaireResultById(resultId);
+      // Если не нашли — ищем в questionnaire_results (с user_id фильтром — IDOR fix)
+      const questResult = await getQuestionnaireResultById(resultId, userId);
       if (questResult) {
         setResult(toQuestUnified(questResult));
         if (userId) {
           const trend = await getQuestionnaireResultsByType(userId, questResult.type, 10);
           setQuestTrend(questToTrendData(trend));
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Ищем в lab_results (с user_id фильтром — IDOR fix)
+      const labResult = await getLabResultById(resultId, userId);
+      if (labResult) {
+        const unified = toLabUnified(labResult);
+        setResult(unified);
+        // Выбираем первый биомаркер для тренда
+        if (unified.labValues && unified.labValues.length > 0) {
+          const firstKey = unified.labValues[0].name;
+          setSelectedBiomarker(firstKey);
         }
         setLoading(false);
         return;
@@ -87,19 +129,23 @@ export function ResultPage({ resultId, onBack }: ResultPageProps) {
     load();
   }, [resultId, userId]);
 
+  // Загрузка тренда при смене биомаркера
+  useEffect(() => {
+    if (!selectedBiomarker || !userId || result?.kind !== 'lab') return;
+    getLabValueHistory(userId, selectedBiomarker, 6).then(setLabTrendData);
+  }, [selectedBiomarker, userId, result?.kind]);
+
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Spinner size="l" />
-      </div>
-    );
+    return <TgLoader text="Загрузка результата..." />;
   }
 
   if (!result) {
     return (
-      <div className="p-4 text-center text-tg-hint">
-        Результат не найден
-      </div>
+      <TgEmptyState
+        icon="🔍"
+        title="Результат не найден"
+        description="Попробуйте вернуться назад"
+      />
     );
   }
 
@@ -112,6 +158,7 @@ export function ResultPage({ resultId, onBack }: ResultPageProps) {
 
   // Для опросников
   const isQuest = result.kind === 'questionnaire';
+  const isLab = result.kind === 'lab';
   const questType = result.testId as QuestionnaireType;
   const questInfo = isQuest ? QUESTIONNAIRE_INFO[questType] : null;
   const interp = isQuest && result.score !== null
@@ -119,7 +166,7 @@ export function ResultPage({ resultId, onBack }: ResultPageProps) {
     : null;
 
   // Для body scan
-  const metrics = !isQuest
+  const metrics = !isQuest && !isLab
     ? (result.resultData?.metrics as Record<string, PostureMetric> | undefined)
     : undefined;
   const recommendations = result.recommendations ?? [];
@@ -127,7 +174,14 @@ export function ResultPage({ resultId, onBack }: ResultPageProps) {
   // Название теста
   const testName = isQuest
     ? (questInfo?.name ?? result.testId)
-    : (TEST_NAMES[result.testId] ?? result.testId);
+    : isLab
+      ? (LAB_CATEGORY_NAMES[result.labCategory ?? ''] ?? '\u{1F9EA} Анализы')
+      : (TEST_NAMES[result.testId] ?? result.testId);
+
+  // Для тренда лабораторного — текущий выбранный биомаркер
+  const selectedBiomarkerInfo = isLab && selectedBiomarker
+    ? result.labValues?.find(v => v.name === selectedBiomarker)
+    : null;
 
   return (
     <div>
@@ -139,8 +193,8 @@ export function ResultPage({ resultId, onBack }: ResultPageProps) {
         </div>
       </Section>
 
-      {/* Score Gauge */}
-      {result.score !== null && (
+      {/* Score Gauge (body scan + опросники) */}
+      {!isLab && result.score !== null && (
         <Section>
           <div className="py-2">
             <ScoreGauge
@@ -213,8 +267,104 @@ export function ResultPage({ resultId, onBack }: ResultPageProps) {
         </Section>
       )}
 
+      {/* === LAB RESULTS === */}
+
+      {/* Таблица показателей анализа */}
+      {isLab && result.labValues && result.labValues.length > 0 && (
+        <Section header={`Показатели (${result.labValues.length})`}>
+          {result.labValues.map((v, i) => (
+            <Cell
+              key={i}
+              before={<span>{STATUS_EMOJI[v.status] ?? '\u26AA'}</span>}
+              subtitle={
+                v.refMin !== undefined && v.refMax !== undefined
+                  ? `Норма: ${v.refMin}\u2013${v.refMax} ${v.unit}`
+                  : v.unit
+              }
+              after={
+                <span
+                  className="text-sm font-medium cursor-pointer"
+                  style={{
+                    color: v.status === 'normal' ? 'var(--tg-theme-text-color)' : '#ff9500',
+                    textDecoration: 'underline',
+                    textDecorationStyle: 'dotted',
+                  }}
+                  onClick={() => setSelectedBiomarker(v.name)}
+                >
+                  {v.value} {v.unit}
+                </span>
+              }
+            >
+              {v.nameRu}
+            </Cell>
+          ))}
+        </Section>
+      )}
+
+      {/* AI Интерпретация анализа */}
+      {isLab && result.interpretation && (
+        <Section header="\u{1F916} AI Интерпретация">
+          <div className="px-4 py-3">
+            <div className="text-sm">{result.interpretation}</div>
+          </div>
+        </Section>
+      )}
+
+      {/* Предупреждения анализа */}
+      {isLab && result.warnings && result.warnings.length > 0 && (
+        <Section header="\u26A0\uFE0F Предупреждения">
+          {result.warnings.map((w, i) => (
+            <Cell key={i} multiline>
+              {`\u2022 ${w}`}
+            </Cell>
+          ))}
+        </Section>
+      )}
+
+      {/* Тренд лабораторного показателя */}
+      {isLab && selectedBiomarkerInfo && labTrendData.length > 1 && (
+        <Section header="Тренд показателя">
+          <div className="px-2 pb-2">
+            <LabTrendChart
+              data={labTrendData}
+              refMin={selectedBiomarkerInfo.refMin}
+              refMax={selectedBiomarkerInfo.refMax}
+              unit={selectedBiomarkerInfo.unit}
+              nameRu={selectedBiomarkerInfo.nameRu}
+            />
+          </div>
+        </Section>
+      )}
+
+      {/* Селектор биомаркера для тренда */}
+      {isLab && result.labValues && result.labValues.length > 1 && (
+        <Section header="Выбрать показатель">
+          <div className="px-4 py-2 flex flex-wrap gap-2">
+            {result.labValues.map((v) => (
+              <button
+                key={v.name}
+                onClick={() => setSelectedBiomarker(v.name)}
+                className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                style={{
+                  backgroundColor: selectedBiomarker === v.name
+                    ? 'var(--tg-theme-link-color, #007aff)'
+                    : 'var(--tg-theme-secondary-bg-color, #e5e7eb)',
+                  color: selectedBiomarker === v.name
+                    ? '#fff'
+                    : 'var(--tg-theme-text-color, #000)',
+                }}
+              >
+                {v.nameRu}
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* === END LAB RESULTS === */}
+
       {/* Тренд — body scan */}
-      {!isQuest && diagTrend.length > 1 && (
+      {!isQuest && !isLab && diagTrend.length > 1 && (
         <Section header="Тренд">
           <div className="px-2 pb-2">
             <TrendChart results={diagTrend} />
@@ -252,12 +402,19 @@ export function ResultPage({ resultId, onBack }: ResultPageProps) {
       )}
 
       {/* Уверенность анализа (body scan only) */}
-      {!isQuest && result.aiConfidence != null && (
+      {!isQuest && !isLab && result.aiConfidence != null && (
         <Section>
           <Cell subtitle={`${Math.round(result.aiConfidence * 100)}%`}>
             Уверенность анализа
           </Cell>
         </Section>
+      )}
+
+      {/* Дисклеймер */}
+      {isLab && (
+        <div className="px-4 py-3 text-xs text-tg-hint text-center">
+          {'\u2695\uFE0F'} Информационный анализ, не медицинский диагноз. Покажите результаты врачу.
+        </div>
       )}
     </div>
   );
